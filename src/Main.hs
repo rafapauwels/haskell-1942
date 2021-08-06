@@ -9,6 +9,8 @@ data DirecaoMovimento = Esquerda | Direita | Centro | Cima | Baixo deriving (Eq)
 
 data AcaoJogador = Atirando | Nenhum deriving (Eq)
 
+data Tela = Menu | Jogando | GameOver deriving (Eq)
+
 data World = World {  posicaoX    :: Float
                     , posicaoY    :: Float
                     , direcao     :: DirecaoMovimento 
@@ -16,6 +18,7 @@ data World = World {  posicaoX    :: Float
                     , acaoAtual   :: AcaoJogador 
                     , velocidadeX :: Float
                     , velocidadeY :: Float
+                    , tela        :: Tela
                     }
 
 janela :: Display 
@@ -34,19 +37,52 @@ handler (EventKey (Char 's') Up _ _) gs = gs { velocidadeY = velocidadeY gs - (-
 handler _ gs = gs
 
 update :: Float -> World -> World
-update _ gs = gs { 
-                   posicaoX = posicaoX gs + velocidadeX gs
-                 , posicaoY = posicaoY gs + velocidadeY gs
+update _ gs
+  | tela gs == Jogando = updateJogo gs
+  | otherwise          = gs
+
+updateJogo :: World -> World
+updateJogo gs = gs {
+                   posicaoX = seguraBordas (posicaoX gs + fatorX) 1024
+                 , posicaoY = seguraBordas (posicaoY gs + fatorY) 768
+                 , direcao  = handleDirecao
                  }
+                 where fatorX = if velocidadeY gs /= 0 then
+                                  velocidadeX gs * 0.7
+                                else
+                                  velocidadeX gs
+                       fatorY = if velocidadeX gs /= 0 then
+                                  velocidadeY gs * 0.7
+                                else
+                                  velocidadeY gs
+
+                       handleDirecao
+                          | velocidadeX gs == 0 = Centro
+                          | velocidadeX gs < 0  = Esquerda
+                          | otherwise = Direita
+
+seguraBordas :: Float -> Float -> Float
+seguraBordas pos borda
+  | pos > (borda / 2)    = borda / 2
+  | pos < ((-borda) / 2) = (-borda) / 2
+  | otherwise            = pos
 
 draw :: World -> [Picture] -> Picture 
-draw gs ps = translate posX posY (head ps)
-  where posX = posicaoX gs 
+draw gs ps = translate posX posY (qualFrame gs ps)
+  where posX = posicaoX gs
         posY = posicaoY gs
+
+qualFrame :: World -> [Picture] -> Picture
+qualFrame gs ps
+  | direcao gs == Esquerda = ps !! 1
+  | direcao gs == Direita = ps !! 2
+  | otherwise = head ps
 
 main :: IO ()
 main = do
-  plane <- loadPNG "assets/plane_center.png"
+  pcentro   <- loadPNG "assets/plane_center.png"
+  pesquerdo <- loadPNG "assets/plane_left.png"
+  pdireito  <- loadPNG "assets/plane_right.png"
   let world = World { 
     posicaoX    = 0.0,
     posicaoY    = 0.0,
@@ -54,14 +90,15 @@ main = do
     spriteAtual = 0,
     acaoAtual   = Nenhum,
     velocidadeX = 0,
-    velocidadeY = 0
+    velocidadeY = 0,
+    tela        = Jogando
   }
   play
     janela
     white
     60
     world
-    (`draw` [plane])
+    (`draw` [pcentro, pesquerdo, pdireito])
     handler
     update
 
