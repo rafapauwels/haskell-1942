@@ -15,7 +15,7 @@ data Tela = Menu | Jogando | GameOver deriving (Eq)
 
 data Bala = Bala { balaX :: Float, balaY :: Float }
 
-data Inimigo = Inimigo { inimigoX :: Float, inimigoY :: Float}
+data Inimigo = Inimigo { inimigoX :: Float, inimigoY :: Float, proxTiro :: Float, atirando :: Bool}
 
 data World = World {  posicaoX      :: Float
                     , posicaoY      :: Float
@@ -50,16 +50,19 @@ handler _ gs = gs
 janela :: Display 
 janela = InWindow "Haskell 1942" (1024, 768) (0, 0)
 
+-- Gera o inimigo na lista de inimigos
 spawnInimigo :: World -> World
 spawnInimigo gs = gs { spawning = True
-                     , inimigos = inimigos gs ++ [Inimigo { inimigoX = 0, inimigoY = 384}]}
+                     , inimigos = inimigos gs ++ [Inimigo { inimigoX = 0, inimigoY = 384, proxTiro = 0.5, atirando = False}]}
 
+-- Controle de fluxo do jogo
 step :: Float -> World -> World
 step t gs = case tela gs of
   Menu     -> gs
   Jogando  -> updateJogando t gs
   GameOver -> gs
 
+-- Cria um novo inimigo a cada 3 segundos
 spawner :: Float -> World -> World
 spawner t gs = if floor (timer gs) `mod` 3 == 0 then
     if spawning gs then
@@ -72,17 +75,29 @@ spawner t gs = if floor (timer gs) `mod` 3 == 0 then
 updateTimer :: Float -> World -> World
 updateTimer t gs = gs { timer = timer gs + t}
 
+-- Se o inimigo está pronto para atirar adiciona uma nova bala na lista de balas inimigas
+inimigosAtiram :: World -> World
+inimigosAtiram gs = gs { balasInimigos = balasInimigos gs ++
+                                      [Bala { balaX = inimigoX i, balaY = inimigoY i }
+                                            | i <- inimigos gs, proxTiro i < 0, not (atirando i)]}
+
+-- Caso o inimigo já tenha atirado reseto o próximo tiro, do contrário mantenho p
+resetaTiro :: Float -> Float
+resetaTiro p = if p < -0.1 then 1 else p
+
+-- Roda em loop chamando os updates
 updateJogando :: Float -> World -> World
-updateJogando t gs = spawner t $ updateWorldState $ updateTimer t gs
+updateJogando t gs = spawner t $ updateWorldState t $ updateTimer t $ inimigosAtiram gs
 
-
-updateWorldState :: World -> World
-updateWorldState gs = gs {
-                           posicaoX = seguraBordas (posicaoX gs + fatorX) 1024
-                         , posicaoY = seguraBordas (posicaoY gs + fatorY) 768
-                         , direcao  = handleDirecao
-                         , balas    = atualizaBalas
-                         , inimigos = atualizaInimigos
+-- Atualiza todos os estados de forma genérica
+updateWorldState :: Float -> World -> World
+updateWorldState t gs = gs {
+                           posicaoX      = seguraBordas (posicaoX gs + fatorX) 1024
+                         , posicaoY      = seguraBordas (posicaoY gs + fatorY) 768
+                         , direcao       = handleDirecao
+                         , balas         = atualizaBalas
+                         , balasInimigos = atualizaBalasInimigos
+                         , inimigos      = atualizaInimigos
                          }
                          where fatorX = if velocidadeY gs /= 0 then
                                           velocidadeX gs * 0.7
@@ -92,36 +107,46 @@ updateWorldState gs = gs {
                                             velocidadeY gs * 0.7
                                           else
                                             velocidadeY gs
-                               atualizaBalas    = [Bala { balaX = balaX bala
-                                                          , balaY = balaY bala + 25}| bala <- balas gs
-                                                                                    , balaY bala < 368] -- Tamanho de meia tela
+                               atualizaBalas = [Bala { balaX = balaX bala
+                                                     , balaY = balaY bala + 25}| bala <- balas gs
+                                                                               , balaY bala < 368] -- Tamanho de meia tela
+                               atualizaBalasInimigos = [Bala { balaX = balaX bala
+                                                             , balaY = balaY bala - 8}| bala <- balasInimigos gs
+                                                                                        , balaY bala > -400]
                                atualizaInimigos = [Inimigo { inimigoX = inimigoX i
-                                                           , inimigoY = inimigoY i - 3} | i <- inimigos gs
-                                                                                        , inimigoY i > -400]
+                                                           , inimigoY = inimigoY i - 3
+                                                           , proxTiro = resetaTiro (proxTiro i - t)
+                                                           , atirando = proxTiro i < 0 } | i <- inimigos gs, inimigoY i > -400]
                                handleDirecao
                                     | velocidadeX gs == 0 = Centro
                                     | velocidadeX gs < 0  = Esquerda
                                     | otherwise = Direita
 
+-- Garante que o jogador não vai voar para fora da tela
 seguraBordas :: Float -> Float -> Float
 seguraBordas pos borda
   | pos > (borda / 2)    = borda / 2
   | pos < ((-borda) / 2) = (-borda) / 2
   | otherwise            = pos
 
+-- Cria uma nova bala na lista de balas ativas
 disparaBala :: World -> World
 disparaBala gs = gs { balas = balas gs ++ [Bala { balaX = posicaoX gs, balaY = posicaoY gs }] }
 
+-- Faz toda a renderização gráfica
 draw :: World -> [Picture] -> Picture 
 draw gs ps = pictures $ 
               translate posX posY (qualFrame gs ps) :
               [translate (balaX bala) (balaY bala) balaImg | bala <- balas gs] ++
+              [translate (balaX bala) (balaY bala) balaImgIn | bala <- balasInimigos gs] ++
               [translate (inimigoX i) (inimigoY i) inimigoImg | i <- inimigos gs]
-  where posX      = posicaoX gs
-        posY      = posicaoY gs
-        balaImg   = ps !! 3
+  where posX       = posicaoX gs
+        posY       = posicaoY gs
+        balaImg    = ps !! 3
+        balaImgIn  = ps !! 5
         inimigoImg = ps !! 4
 
+-- Decide qual é a imagem correta do player dado sua direção
 qualFrame :: World -> [Picture] -> Picture
 qualFrame gs ps
   | direcao gs == Esquerda = ps !! 1
@@ -130,11 +155,12 @@ qualFrame gs ps
 
 main :: IO ()
 main = do
-  pcentro   <- loadPNG "assets/plane_center.png" 87 68
-  pesquerdo <- loadPNG "assets/plane_left.png"   87 68
-  pdireito  <- loadPNG "assets/plane_right.png"  87 68
-  inimigo   <- loadPNG "assets/inimigo.png"      87 68
-  bullet    <- loadPNG "assets/bullet.png"       8  16
+  pcentro       <- loadPNG "assets/plane_center.png" 87 68 False
+  pesquerdo     <- loadPNG "assets/plane_left.png"   87 68 False
+  pdireito      <- loadPNG "assets/plane_right.png"  87 68 False
+  inimigo       <- loadPNG "assets/inimigo.png"      87 68 False
+  bullet        <- loadPNG "assets/bullet.png"       8  16 False
+  bulletInimigo <- loadPNG "assets/bullet.png"       8  16 True
   let world = World { 
     posicaoX      = 0.0,
     posicaoY      = 0.0,
@@ -155,13 +181,17 @@ main = do
     white
     60
     world
-    (`draw` [pcentro, pesquerdo, pdireito, bullet, inimigo])
+    (`draw` [pcentro, pesquerdo, pdireito, bullet, inimigo, bulletInimigo])
     handler
     step
 
+-- Possibilita carregar PNGs ao invés dos BMP suportados pelo Gloss
 -- Referência https://stackoverflow.com/questions/12222728/png-to-bmp-in-haskell-for-gloss
-loadPNG :: FilePath -> Int -> Int -> IO Picture
-loadPNG path w h = do
-  (Right img) <- readImageRGBA path
-  let bs = toByteString $ reverseColorChannel img
-  return $ bitmapOfByteString w h (BitmapFormat TopToBottom PxRGBA) bs True
+loadPNG :: FilePath -> Int -> Int -> Bool -> IO Picture
+loadPNG path w h rot = do
+                        (Right img) <- readImageRGBA path
+                        let bs = toByteString $ reverseColorChannel img
+                        if rot then
+                            return $ bitmapOfByteString w h (BitmapFormat BottomToTop PxRGBA) bs True
+                        else
+                            return $ bitmapOfByteString w h (BitmapFormat TopToBottom PxRGBA) bs True
