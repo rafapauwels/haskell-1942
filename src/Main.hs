@@ -10,6 +10,7 @@ import Graphics.Gloss.Data.Bitmap (loadBMP)
 import Background
 import World
 import Collider
+import GameOver
 
 handler :: Event -> World -> World
 handler (EventKey (Char 'a') Down _ _) gs = updateVelocidadeX gs (-10)
@@ -23,8 +24,27 @@ handler (EventKey (Char 'w') Up _ _) gs = updateVelocidadeY gs (-10)
 handler (EventKey (Char 's') Up _ _) gs = updateVelocidadeY gs 10
 
 handler (EventKey (SpecialKey KeySpace) Down _ _) gs = disparaBala gs
+handler (EventKey (Char 'r') Down _ _) gs = resetState
 
 handler _ gs = gs
+
+resetState :: World
+resetState = World {
+                    tela          = Jogando
+                  , balas         = []
+                  , inimigos      = []
+                  , balasInimigos = []
+                  , timer         = 0
+                  , spawning      = True
+                  , jogador       = Jogador { jogadorX    = 0.0
+                                            , jogadorY    = 0.0
+                                            , direcao     = Centro
+                                            , spriteAtual = 0
+                                            , acaoAtual   = Nenhum
+                                            , velocidadeX = 0
+                                            , velocidadeY = 0
+                                            , vidas       = 1 }
+                  }
 
 updateVelocidadeX :: World -> Float -> World
 updateVelocidadeX gs v = gs { jogador = Jogador { jogadorX    = jogadorX (jogador gs)
@@ -59,7 +79,7 @@ step :: Float -> World -> World
 step t gs = case tela gs of
   Menu     -> gs
   Jogando  -> updateJogando t gs
-  GameOver -> gs
+  GameOver -> updateTimer t gs -- Para de fazer updates
 
 -- Cria um novo inimigo a cada 2 segundos
 spawner :: Float -> World -> World
@@ -95,6 +115,7 @@ updateWorldState t gs = gs {
                          , balas         = atualizaBalas
                          , balasInimigos = atualizaBalasInimigos
                          , inimigos      = atualizaInimigos
+                         , tela          = if vidas (jogador gs) == 0 then GameOver else Jogando
                          }
                          where fatorX = if velocidadeY (jogador gs) /= 0 then
                                           velocidadeX (jogador gs) * 0.7
@@ -130,13 +151,16 @@ updateWorldState t gs = gs {
 -- Garante que o jogador não vai voar para fora da tela
 seguraBordas :: Float -> Float -> Float
 seguraBordas pos borda
-  | pos > (borda / 2)    = borda / 2
-  | pos < ((-borda) / 2) = (-borda) / 2
+  | pos >= (borda / 2)    = borda / 2
+  | pos <= ((-borda) / 2) = (-borda) / 2
   | otherwise            = pos
 
 -- Cria uma nova bala na lista de balas ativas
 disparaBala :: World -> World
-disparaBala gs = gs { balas = balas gs ++ [Bala { balaX = jogadorX (jogador gs), balaY = jogadorY (jogador gs) }] }
+disparaBala gs = if tela gs == Jogando then
+                   gs { balas = balas gs ++ [Bala { balaX = jogadorX (jogador gs), balaY = jogadorY (jogador gs) }] }
+                 else
+                   gs
 
 -- Faz toda a renderização gráfica
 draw :: World -> [Picture] -> Picture 
@@ -145,7 +169,8 @@ draw gs ps = pictures $
               translate posX posY (qualFrame gs ps) :
               [translate (balaX bala) (balaY bala) balaImg | bala <- balas gs] ++
               [translate (balaX bala) (balaY bala) balaImgIn | bala <- balasInimigos gs] ++
-              [translate (inimigoX i) (inimigoY i) inimigoImg | i <- inimigos gs]
+              [translate (inimigoX i) (inimigoY i) inimigoImg | i <- inimigos gs] ++
+              drawGameOver gs gameover
   where posX       = jogadorX $ jogador gs
         posY       = jogadorY $ jogador gs
         balaImg    = ps !! 3
@@ -153,6 +178,7 @@ draw gs ps = pictures $
         inimigoImg = ps !! 4
         agua1      = ps !! 6
         agua2      = ps !! 7
+        gameover   = ps !! 8
 
 -- Decide qual é a imagem correta do player dado sua direção
 qualFrame :: World -> [Picture] -> Picture
@@ -163,36 +189,22 @@ qualFrame gs ps
 
 main :: IO ()
 main = do
-  pcentro       <- loadPNG "assets/plane_center.png" 87 68 False
-  pesquerdo     <- loadPNG "assets/plane_left.png"   87 68 False
-  pdireito      <- loadPNG "assets/plane_right.png"  87 68 False
-  inimigo       <- loadPNG "assets/inimigo.png"      87 68 False
-  bullet        <- loadPNG "assets/bullet.png"       16 32 False
-  bulletInimigo <- loadPNG "assets/bullet.png"       16 32 True
-  agua1         <- loadPNG "assets/agua_1.png"       56 57 False
-  agua2         <- loadPNG "assets/agua_2.png"       56 57 False
-  let world = World {
-      tela          = Jogando
-    , balas         = []
-    , inimigos      = []
-    , balasInimigos = []
-    , timer         = 0
-    , spawning      = True
-    , jogador         = Jogador { jogadorX    = 0.0
-                                , jogadorY    = 0.0
-                                , direcao     = Centro
-                                , spriteAtual = 0
-                                , acaoAtual   = Nenhum
-                                , velocidadeX = 0
-                                , velocidadeY = 0
-                                , vidas       = 3 }
-  }
+  pcentro       <- loadPNG "assets/plane_center.png" 87  68 False
+  pesquerdo     <- loadPNG "assets/plane_left.png"   87  68 False
+  pdireito      <- loadPNG "assets/plane_right.png"  87  68 False
+  inimigo       <- loadPNG "assets/inimigo.png"      87  68 False
+  bullet        <- loadPNG "assets/bullet.png"       16  32 False
+  bulletInimigo <- loadPNG "assets/bullet.png"       16  32 True
+  agua1         <- loadPNG "assets/agua_1.png"       56  57 False
+  agua2         <- loadPNG "assets/agua_2.png"       56  57 False
+  gameover      <- loadPNG "assets/gameover.png"     400 80 False
+  let world = resetState
   play
     janela
     white
     60
     world
-    (`draw` [pcentro, pesquerdo, pdireito, bullet, inimigo, bulletInimigo, agua1, agua2])
+    (`draw` [pcentro, pesquerdo, pdireito, bullet, inimigo, bulletInimigo, agua1, agua2, gameover])
     handler
     step
 
