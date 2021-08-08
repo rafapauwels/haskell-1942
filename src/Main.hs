@@ -11,6 +11,7 @@ import Background
 import World
 import Collider
 import GameOver
+import UI
 
 handler :: Event -> World -> World
 handler (EventKey (Char 'a') Down _ _) gs = updateVelocidadeX gs (-10)
@@ -24,47 +25,49 @@ handler (EventKey (Char 'w') Up _ _) gs = updateVelocidadeY gs (-10)
 handler (EventKey (Char 's') Up _ _) gs = updateVelocidadeY gs 10
 
 handler (EventKey (SpecialKey KeySpace) Down _ _) gs = disparaBala gs
-handler (EventKey (Char 'r') Down _ _) gs = resetState
+
+handler (EventKey (SpecialKey KeyEnter) Down _ _) gs = if tela gs == Menu then resetState Jogando else gs
+handler (EventKey (Char 'r') Down _ _) gs      = if tela gs == GameOver then resetState Jogando else gs
 
 handler _ gs = gs
 
-resetState :: World
-resetState = World {
-                    tela          = Jogando
-                  , balas         = []
-                  , inimigos      = []
-                  , balasInimigos = []
-                  , timer         = 0
-                  , spawning      = True
-                  , jogador       = Jogador { jogadorX    = 0.0
-                                            , jogadorY    = 0.0
-                                            , direcao     = Centro
-                                            , spriteAtual = 0
-                                            , acaoAtual   = Nenhum
-                                            , velocidadeX = 0
-                                            , velocidadeY = 0
-                                            , vidas       = 1 }
+resetState :: Tela -> World
+resetState t = World {
+                      tela          = t
+                    , balas         = []
+                    , inimigos      = []
+                    , balasInimigos = []
+                    , timer         = 0
+                    , spawning      = True
+                    , jogador       = Jogador { jogadorX       = 0.0
+                                              , jogadorY       = 0.0
+                                              , direcao        = Centro
+                                              , spriteAtual    = 0
+                                              , tempoRecuperar = 0
+                                              , velocidadeX    = 0
+                                              , velocidadeY    = 0
+                                              , vidas          = 3 }
                   }
 
 updateVelocidadeX :: World -> Float -> World
-updateVelocidadeX gs v = gs { jogador = Jogador { jogadorX    = jogadorX (jogador gs)
-                                                , jogadorY    = jogadorY (jogador gs)
-                                                , direcao     = direcao (jogador gs)
-                                                , spriteAtual = spriteAtual (jogador gs)
-                                                , acaoAtual   = acaoAtual (jogador gs)
-                                                , velocidadeX = velocidadeX (jogador gs) + v
-                                                , velocidadeY = velocidadeY (jogador gs)
-                                                , vidas       = vidas (jogador gs) }}
+updateVelocidadeX gs v = gs { jogador = Jogador { jogadorX       = jogadorX (jogador gs)
+                                                , jogadorY       = jogadorY (jogador gs)
+                                                , direcao        = direcao (jogador gs)
+                                                , spriteAtual    = spriteAtual (jogador gs)
+                                                , tempoRecuperar = tempoRecuperar (jogador gs)
+                                                , velocidadeX    = velocidadeX (jogador gs) + v
+                                                , velocidadeY    = velocidadeY (jogador gs)
+                                                , vidas          = vidas (jogador gs) }}
 
 updateVelocidadeY :: World -> Float -> World
-updateVelocidadeY gs v = gs { jogador = Jogador { jogadorX    = jogadorX (jogador gs)
-                                                , jogadorY    = jogadorY (jogador gs)
-                                                , direcao     = direcao (jogador gs)
-                                                , spriteAtual = spriteAtual (jogador gs)
-                                                , acaoAtual   = acaoAtual (jogador gs)
-                                                , velocidadeX = velocidadeX (jogador gs)
-                                                , velocidadeY = velocidadeY (jogador gs) + v
-                                                , vidas       = vidas (jogador gs) }}
+updateVelocidadeY gs v = gs { jogador = Jogador { jogadorX       = jogadorX (jogador gs)
+                                                , jogadorY       = jogadorY (jogador gs)
+                                                , direcao        = direcao (jogador gs)
+                                                , spriteAtual    = spriteAtual (jogador gs)
+                                                , tempoRecuperar = tempoRecuperar (jogador gs)
+                                                , velocidadeX    = velocidadeX (jogador gs)
+                                                , velocidadeY    = velocidadeY (jogador gs) + v
+                                                , vidas          = vidas (jogador gs) }}
 
 janela :: Display 
 janela = InWindow "Haskell 1942" (1024, 768) (0, 0)
@@ -77,9 +80,9 @@ spawnInimigo gs = gs { spawning = True
 -- Controle de fluxo do jogo
 step :: Float -> World -> World
 step t gs = case tela gs of
-  Menu     -> gs
-  Jogando  -> updateJogando t gs
-  GameOver -> updateTimer t gs -- Para de fazer updates
+  Menu     -> updateTimer t gs   -- Nao tem atualizaçao
+  Jogando  -> updateJogando t gs -- Jogo normal
+  GameOver -> updateTimer t gs   -- Congela a tela
 
 -- Cria um novo inimigo a cada 2 segundos
 spawner :: Float -> World -> World
@@ -135,14 +138,14 @@ updateWorldState t gs = gs {
                                                            , inimigoY = inimigoY i - 3
                                                            , proxTiro = resetaTiro (proxTiro i - t)
                                                            , atirando = proxTiro i < 0 } | i <- inimigos gs, inimigoY i > -400]
-                               atualizaJogador = Jogador { jogadorX    = seguraBordas (jogadorX (jogador gs) + fatorX) 1024
-                                                         , jogadorY    = seguraBordas (jogadorY (jogador gs) + fatorY) 768
-                                                         , direcao     = handleDirecao
-                                                         , spriteAtual = spriteAtual (jogador gs)
-                                                         , acaoAtual   = acaoAtual (jogador gs)
-                                                         , velocidadeX = velocidadeX (jogador gs)
-                                                         , velocidadeY = velocidadeY (jogador gs)
-                                                         , vidas       = vidas (jogador gs) }
+                               atualizaJogador = Jogador { jogadorX       = seguraBordas (jogadorX (jogador gs) + fatorX) 1024
+                                                         , jogadorY       = seguraBordas (jogadorY (jogador gs) + fatorY) 768
+                                                         , direcao        = handleDirecao
+                                                         , spriteAtual    = spriteAtual (jogador gs)
+                                                         , tempoRecuperar = if tempoRecuperar (jogador gs) > 0 then tempoRecuperar (jogador gs) - t else 0
+                                                         , velocidadeX    = velocidadeX (jogador gs)
+                                                         , velocidadeY    = velocidadeY (jogador gs)
+                                                         , vidas          = vidas (jogador gs) }
                                handleDirecao
                                     | velocidadeX (jogador gs) == 0 = Centro
                                     | velocidadeX (jogador gs) < 0  = Esquerda
@@ -153,7 +156,7 @@ seguraBordas :: Float -> Float -> Float
 seguraBordas pos borda
   | pos >= (borda / 2)    = borda / 2
   | pos <= ((-borda) / 2) = (-borda) / 2
-  | otherwise            = pos
+  | otherwise             = pos
 
 -- Cria uma nova bala na lista de balas ativas
 disparaBala :: World -> World
@@ -166,11 +169,15 @@ disparaBala gs = if tela gs == Jogando then
 draw :: World -> [Picture] -> Picture 
 draw gs ps = pictures $ 
               drawBackground gs agua1 agua2 ++
-              translate posX posY (qualFrame gs ps) :
-              [translate (balaX bala) (balaY bala) balaImg | bala <- balas gs] ++
-              [translate (balaX bala) (balaY bala) balaImgIn | bala <- balasInimigos gs] ++
-              [translate (inimigoX i) (inimigoY i) inimigoImg | i <- inimigos gs] ++
-              drawGameOver gs gameover
+              if tela gs == Menu then
+                drawMenu gs menu instrucoes
+              else
+                blink gs (translate posX posY (qualFrame gs ps)) ++
+                [translate (balaX bala) (balaY bala) balaImg | bala <- balas gs] ++
+                [translate (balaX bala) (balaY bala) balaImgIn | bala <- balasInimigos gs] ++
+                [translate (inimigoX i) (inimigoY i) inimigoImg | i <- inimigos gs] ++
+                drawVidas gs vida ++
+                drawGameOver gs gameover
   where posX       = jogadorX $ jogador gs
         posY       = jogadorY $ jogador gs
         balaImg    = ps !! 3
@@ -179,6 +186,13 @@ draw gs ps = pictures $
         agua1      = ps !! 6
         agua2      = ps !! 7
         gameover   = ps !! 8
+        menu       = ps !! 9
+        instrucoes = ps !! 10
+        vida       = ps !! 11
+
+-- Pisca jogador caso ele esteja se recuperando de um hit
+blink :: World -> Picture -> [Picture]
+blink gs p = if tempoRecuperar (jogador gs) > 0 then [p | (timer gs - fromIntegral (floor (timer gs))) / 4 > 0.1] else [p]
 
 -- Decide qual é a imagem correta do player dado sua direção
 qualFrame :: World -> [Picture] -> Picture
@@ -189,22 +203,25 @@ qualFrame gs ps
 
 main :: IO ()
 main = do
-  pcentro       <- loadPNG "assets/plane_center.png" 87  68 False
-  pesquerdo     <- loadPNG "assets/plane_left.png"   87  68 False
-  pdireito      <- loadPNG "assets/plane_right.png"  87  68 False
-  inimigo       <- loadPNG "assets/inimigo.png"      87  68 False
-  bullet        <- loadPNG "assets/bullet.png"       16  32 False
-  bulletInimigo <- loadPNG "assets/bullet.png"       16  32 True
-  agua1         <- loadPNG "assets/agua_1.png"       56  57 False
-  agua2         <- loadPNG "assets/agua_2.png"       56  57 False
-  gameover      <- loadPNG "assets/gameover.png"     400 80 False
-  let world = resetState
+  pcentro       <- loadPNG "assets/plane_center.png" 87  68  False
+  pesquerdo     <- loadPNG "assets/plane_left.png"   87  68  False
+  pdireito      <- loadPNG "assets/plane_right.png"  87  68  False
+  inimigo       <- loadPNG "assets/inimigo.png"      87  68  False
+  bullet        <- loadPNG "assets/bullet.png"       16  32  False
+  bulletInimigo <- loadPNG "assets/bullet.png"       16  32  True
+  agua1         <- loadPNG "assets/agua_1.png"       56  57  False
+  agua2         <- loadPNG "assets/agua_2.png"       56  57  False
+  gameover      <- loadPNG "assets/gameover.png"     400 80  False
+  titulo        <- loadPNG "assets/titulo.png"       486 41  False
+  instrucoes    <- loadPNG "assets/instrucoes.png"   444 280 False
+  vida          <- loadPNG "assets/vida.png"         30  30  False
+  let world = resetState Menu
   play
     janela
     white
     60
     world
-    (`draw` [pcentro, pesquerdo, pdireito, bullet, inimigo, bulletInimigo, agua1, agua2, gameover])
+    (`draw` [pcentro, pesquerdo, pdireito, bullet, inimigo, bulletInimigo, agua1, agua2, gameover, titulo, instrucoes, vida])
     handler
     step
 

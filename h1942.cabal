@@ -21,3 +21,4 @@ executable h1942
                      , gloss
                      , JuicyPixels-repa
                      , random
+                     , extra
