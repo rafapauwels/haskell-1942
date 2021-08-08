@@ -6,14 +6,15 @@ collider :: World -> World
 collider gs = colliderG comInimigos $ colliderG comBalasInimigas $ colliderInimigos gs
 
 colliderInimigos :: World -> World
-colliderInimigos gs = if length (balas gs) == 0 then gs else
-                              gs { inimigos = filter (\i -> checaColisaoBala i (balas gs)) (inimigos gs) }
+colliderInimigos gs = if length (balas gs) == 0 then 
+                        gs
+                      else
+                        gs { inimigos = filter (\i -> checaColisaoBala i (balas gs)) (inimigos gs) -- Removo inimigos que colidiram da minha lista de inimigos
+                           , score = if length (filter (\i -> not (checaColisaoBala i (balas gs))) (inimigos gs)) /= 0 then score gs + 50 else score gs }
 
 checaColisaoBala :: Inimigo -> [Bala] -> Bool
-checaColisaoBala i bs = length [i | b <- bs, (
-                                                (balaX b - 10 < inimigoX i + 35) && (balaX b + 10 > inimigoX i - 35) && 
-                                                (balaY b - 10 < inimigoY i + 35) && (balaY b + 10 > inimigoY i - 35)
-                                             )] == 0
+checaColisaoBala i bs = length [i | b <- bs, ((balaX b - 10 < inimigoX i + 35) && (balaX b + 10 > inimigoX i - 35) && 
+                                              (balaY b - 10 < inimigoY i + 35) && (balaY b + 10 > inimigoY i - 35))] == 0
 
 colliderG :: (World -> [a]) -> World  -> World
 colliderG f gs = if tempoRecuperar (jogador gs) > 0 then

@@ -17,4 +17,5 @@ data World = World {  jogador       :: Jogador
                     , balasInimigos :: [Bala]
                     , timer         :: Float
                     , spawning      :: Bool
+                    , score         :: Int
                     }

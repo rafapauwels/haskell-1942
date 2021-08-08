@@ -3,9 +3,7 @@ module Main where
 import Codec.Picture.Repa (readImageRGBA, toByteString, reverseColorChannel)
 import Graphics.Gloss
 import Graphics.Gloss.Interface.Pure.Game
-import Graphics.Gloss.Interface.IO.Animate (pictures)
 import System.Random
-import Graphics.Gloss.Data.Bitmap (loadBMP)
 
 import Background
 import World
@@ -39,6 +37,7 @@ resetState t = World {
                     , balasInimigos = []
                     , timer         = 0
                     , spawning      = True
+                    , score         = 0
                     , jogador       = Jogador { jogadorX       = 0.0
                                               , jogadorY       = 0.0
                                               , direcao        = Centro
@@ -72,19 +71,19 @@ updateVelocidadeY gs v = gs { jogador = Jogador { jogadorX       = jogadorX (jog
 janela :: Display 
 janela = InWindow "Haskell 1942" (1024, 768) (0, 0)
 
--- Gera o inimigo na lista de inimigos entre -400 e 400 no eixo X
+-- | Gera o inimigo na lista de inimigos entre -400 e 400 no eixo X
 spawnInimigo :: World -> World
 spawnInimigo gs = gs { spawning = True
                      , inimigos = inimigos gs ++ [Inimigo { inimigoX = sin (timer gs) * 400, inimigoY = 384, proxTiro = 0.5, atirando = False}]}
 
--- Controle de fluxo do jogo
+-- | Controle de fluxo do jogo
 step :: Float -> World -> World
 step t gs = case tela gs of
   Menu     -> updateTimer t gs   -- Nao tem atualizaçao
   Jogando  -> updateJogando t gs -- Jogo normal
   GameOver -> updateTimer t gs   -- Congela a tela
 
--- Cria um novo inimigo a cada 2 segundos
+-- | Cria um novo inimigo a cada segundo
 spawner :: Float -> World -> World
 spawner t gs = if even (floor (timer gs)) then
     if spawning gs then
@@ -97,21 +96,21 @@ spawner t gs = if even (floor (timer gs)) then
 updateTimer :: Float -> World -> World
 updateTimer t gs = gs { timer = timer gs + t}
 
--- Se o inimigo está pronto para atirar adiciona uma nova bala na lista de balas inimigas
+-- | Se o inimigo está pronto para atirar adiciona uma nova bala na lista de balas inimigas
 inimigosAtiram :: World -> World
 inimigosAtiram gs = gs { balasInimigos = balasInimigos gs ++
                                       [Bala { balaX = inimigoX i, balaY = inimigoY i }
                                             | i <- inimigos gs, proxTiro i < 0, not (atirando i)]}
 
--- Caso o inimigo já tenha atirado reseto o próximo tiro, do contrário mantenho p
+-- | Caso o inimigo já tenha atirado reseto o próximo tiro, do contrário mantenho p
 resetaTiro :: Float -> Float
 resetaTiro p = if p < -0.1 then 1 else p
 
--- Roda em loop chamando os updates
+-- | Roda em loop chamando os updates
 updateJogando :: Float -> World -> World
 updateJogando t gs = spawner t $ updateWorldState t $ updateTimer t $ inimigosAtiram $ collider gs
 
--- Atualiza todos os estados de forma genérica
+-- | Atualiza todos os estados de forma genérica
 updateWorldState :: Float -> World -> World
 updateWorldState t gs = gs {
                            jogador       = atualizaJogador
@@ -132,10 +131,10 @@ updateWorldState t gs = gs {
                                                      , balaY = balaY bala + 25}| bala <- balas gs
                                                                                , balaY bala < 368] -- Tamanho de meia tela
                                atualizaBalasInimigos = [Bala { balaX = balaX bala
-                                                             , balaY = balaY bala - 8}| bala <- balasInimigos gs
+                                                             , balaY = balaY bala - 10}| bala <- balasInimigos gs
                                                                                         , balaY bala > -400]
                                atualizaInimigos = [Inimigo { inimigoX = sin (timer gs) * 2 + inimigoX i
-                                                           , inimigoY = inimigoY i - 3
+                                                           , inimigoY = inimigoY i - 5
                                                            , proxTiro = resetaTiro (proxTiro i - t)
                                                            , atirando = proxTiro i < 0 } | i <- inimigos gs, inimigoY i > -400]
                                atualizaJogador = Jogador { jogadorX       = seguraBordas (jogadorX (jogador gs) + fatorX) 1024
@@ -151,21 +150,21 @@ updateWorldState t gs = gs {
                                     | velocidadeX (jogador gs) < 0  = Esquerda
                                     | otherwise = Direita
 
--- Garante que o jogador não vai voar para fora da tela
+-- | Garante que o jogador não vai voar para fora da tela
 seguraBordas :: Float -> Float -> Float
 seguraBordas pos borda
   | pos >= (borda / 2)    = borda / 2
   | pos <= ((-borda) / 2) = (-borda) / 2
   | otherwise             = pos
 
--- Cria uma nova bala na lista de balas ativas
+-- | Cria uma nova bala na lista de balas ativas
 disparaBala :: World -> World
 disparaBala gs = if tela gs == Jogando then
                    gs { balas = balas gs ++ [Bala { balaX = jogadorX (jogador gs), balaY = jogadorY (jogador gs) }] }
                  else
                    gs
 
--- Faz toda a renderização gráfica
+-- | Faz toda a renderização gráfica
 draw :: World -> [Picture] -> Picture 
 draw gs ps = pictures $ 
               drawBackground gs agua1 agua2 ++
@@ -177,6 +176,7 @@ draw gs ps = pictures $
                 [translate (balaX bala) (balaY bala) balaImgIn | bala <- balasInimigos gs] ++
                 [translate (inimigoX i) (inimigoY i) inimigoImg | i <- inimigos gs] ++
                 drawVidas gs vida ++
+                drawPontuacao gs ++
                 drawGameOver gs gameover
   where posX       = jogadorX $ jogador gs
         posY       = jogadorY $ jogador gs
@@ -190,11 +190,11 @@ draw gs ps = pictures $
         instrucoes = ps !! 10
         vida       = ps !! 11
 
--- Pisca jogador caso ele esteja se recuperando de um hit
+-- | Pisca jogador caso ele esteja se recuperando de um hit
 blink :: World -> Picture -> [Picture]
 blink gs p = if tempoRecuperar (jogador gs) > 0 then [p | (timer gs - fromIntegral (floor (timer gs))) / 4 > 0.1] else [p]
 
--- Decide qual é a imagem correta do player dado sua direção
+-- | Decide qual é a imagem correta do player dado sua direção
 qualFrame :: World -> [Picture] -> Picture
 qualFrame gs ps
   | direcao (jogador gs) == Esquerda = ps !! 1
@@ -225,8 +225,8 @@ main = do
     handler
     step
 
--- Possibilita carregar PNGs ao invés dos BMP suportados pelo Gloss
--- Referência https://stackoverflow.com/questions/12222728/png-to-bmp-in-haskell-for-gloss
+-- | Possibilita carregar PNGs ao invés dos BMP suportados pelo Gloss
+-- | Referência https://stackoverflow.com/questions/12222728/png-to-bmp-in-haskell-for-gloss
 loadPNG :: FilePath -> Int -> Int -> Bool -> IO Picture
 loadPNG path w h rot = do
                         (Right img) <- readImageRGBA path
