@@ -11,6 +11,8 @@ import Collider
 import GameOver
 import UI
 
+-- | Executado todo frame
+-- | Atualiza o game state de acordo a tecla pressionada
 handler :: Event -> World -> World
 handler (EventKey (Char 'a') Down _ _) gs = updateVelocidadeX gs (-10)
 handler (EventKey (Char 'd') Down _ _) gs = updateVelocidadeX gs 10
@@ -29,6 +31,7 @@ handler (EventKey (Char 'r') Down _ _) gs      = if tela gs == GameOver then res
 
 handler _ gs = gs
 
+-- | Limpa o game state, voltando todas as variáveis para seu estado inicial
 resetState :: Tela -> World
 resetState t = World {
                       tela          = t
@@ -93,6 +96,7 @@ spawner t gs = if even (floor (timer gs)) then
   else 
     gs { spawning = False }
 
+-- | Executado a cada frame, incrementa a variável timer com o tempo gasto entre dois frames t
 updateTimer :: Float -> World -> World
 updateTimer t gs = gs { timer = timer gs + t}
 
@@ -164,6 +168,7 @@ disparaBala gs = if tela gs == Jogando then
                  else
                    gs
 
+-- | Executado a cada frame
 -- | Faz toda a renderização gráfica
 draw :: World -> [Picture] -> Picture 
 draw gs ps = pictures $ 
@@ -194,13 +199,15 @@ draw gs ps = pictures $
 blink :: World -> Picture -> [Picture]
 blink gs p = if tempoRecuperar (jogador gs) > 0 then [p | (timer gs - fromIntegral (floor (timer gs))) / 4 > 0.1] else [p]
 
--- | Decide qual é a imagem correta do player dado sua direção
+-- | Decide qual é a imagem correta do player dado sua direção de movimento
 qualFrame :: World -> [Picture] -> Picture
 qualFrame gs ps
   | direcao (jogador gs) == Esquerda = ps !! 1
   | direcao (jogador gs) == Direita  = ps !! 2
   | otherwise = head ps
 
+-- | Inicia o game loop e configura quais serão as funções responsáveis por renderizar
+-- | e por tratar o game state a cada frame.
 main :: IO ()
 main = do
   pcentro       <- loadPNG "assets/plane_center.png" 87  68  False

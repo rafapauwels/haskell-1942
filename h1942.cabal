@@ -2,7 +2,7 @@ name:                h1942
 version:             0.1.0.0
 -- synopsis:
 -- description:
-homepage:            https://github.com/githubuser/h1942#readme
+homepage:            https://github.com/rafapauwels/haskell-1942
 license:             BSD3
 license-file:        LICENSE
 author:              Rafael Pauwels de Macedo

@@ -6,7 +6,7 @@ import Numeric.Extra
 import World
 
 drawMenu :: World -> Picture -> Picture -> [Picture]
-drawMenu gs menu instrucoes = [translate 0 (sin (timer gs * 2) * 20 + 200) menu] ++
+drawMenu gs menu instrucoes = translate 0 (sin (timer gs * 2) * 20 + 200) menu :
                               [translate (sin (timer gs) * 10) (-200) instrucoes]
 
 drawVidas :: World -> Picture -> [Picture]

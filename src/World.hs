@@ -10,6 +10,7 @@ data Jogador = Jogador { jogadorX :: Float, jogadorY :: Float, direcao :: Direca
 
 data Inimigo = Inimigo { inimigoX :: Float, inimigoY :: Float, proxTiro :: Float, atirando :: Bool}
 
+-- | Modelo do GameState, atualizado a cada frame
 data World = World {  jogador       :: Jogador
                     , tela          :: Tela
                     , balas         :: [Bala]
